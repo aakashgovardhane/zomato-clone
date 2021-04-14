@@ -1,10 +1,11 @@
 import axios from 'axios';
 import React from 'react';
+import queryString from 'query-string';
 
 import Modal from 'react-modal';
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-tabs/style/react-tabs.css';
-import queryString from 'query-string';
+
 
 import './styles/overview.css'
 

@@ -11,6 +11,12 @@ const getRest = new schema({
         type: String,
         required: true
     },
+    username: {
+        type: String,
+    },
+    password: {
+        type: String,
+    },
     city: {
         type: String,
         required: true

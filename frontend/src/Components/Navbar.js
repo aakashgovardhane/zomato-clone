@@ -27,6 +27,7 @@ class Navbar extends React.Component {
         super();
         this.state = {
             loginModalIsOpen: false,
+            formModalIsOpen: false,
             caModalIsOpen: false,
             isUserLoggedIn: false,
             user: undefined,
@@ -38,7 +39,16 @@ class Navbar extends React.Component {
             remeberUser: false,
             cart: [],
             cartModalIsOpen: false,
-            subTotal: undefined
+            subTotal: undefined,
+            poname: undefined,
+            pomail: undefined,
+            poaddress: undefined,
+            ponumber: undefined,
+            restLoginModalIsOpen: false,
+            restPassword: undefined,
+            restUsername: undefined,
+            isRestLogin : false,
+            restName : undefined
         }
     }
 
@@ -46,8 +56,11 @@ class Navbar extends React.Component {
         this.props.history.push("/");
     }
 
-    handleModal = (modalName) => {
-        this.setState({ [modalName]: true });
+    handleModal = (modalName, value) => {
+        this.setState({ [modalName]: value });
+        if (modalName == "restLoginModalIsOpen" && value == true) {
+            this.setState({ loginModalIsOpen: false })
+        }
     }
 
     responseGoogle = (response) => {
@@ -93,10 +106,27 @@ class Navbar extends React.Component {
             this.setState({ loginModalIsOpen: false, caModalIsOpen: false, });
         }
     }
+    restLogin = () => {
+        const { restUsername, restPassword } = this.state;
+        const restLogin = {
+            username: restUsername,
+            password: restPassword
+        }
+        axios({
+            method: 'POST',
+            url: 'http://localhost:2000/restLogin',
+            headers: { 'Content-Type': 'application/json' },
+            data: {
+                restLogin: restLogin
+            }
+        }).then((res) => {
+            this.setState({restLoginModalIsOpen:false,isRestLogin:true,restName:res.data.Restaurant.name})
+            this.props.history.push(`/restAdminPanel/?restID=${res.data.Restaurant._id}`);
+        }).catch()
+    }
     login = () => {
         const { username, password } = this.state;
         const socialId = localStorage.getItem('socialId')
-        const userid = localStorage.getItem('userid')
         const usernamec = localStorage.getItem("username")
         const passwordc = localStorage.getItem("password")
         let getuser = undefined;
@@ -134,9 +164,7 @@ class Navbar extends React.Component {
                 if (user.username) {
                     localStorage.setItem("username", user.username)
                     localStorage.setItem("password", user.password)
-                    localStorage.setItem("userid", user._id)
                 } else {
-                    localStorage.setItem("userid", user._id)
                     localStorage.setItem("socialId", user.socialId)
                 }
             }
@@ -185,8 +213,12 @@ class Navbar extends React.Component {
         }
     }
 
-    handleLogout = () => {
-        this.setState({ isUserLoggedIn: false, user: undefined })
+    handleLogout = (value) => {
+        this.setState({ [value]: false, user: undefined,restName:undefined})
+        if(value=="isRestLogin")
+        {
+            this.props.history.push('/')
+        }
         localStorage.clear();
     }
     ca = () => {
@@ -222,9 +254,10 @@ class Navbar extends React.Component {
     }
     cart = (state, value) => {
         const { user, cart, subTotal } = this.state;
-        this.setState({ [state]: value, cart: [] })
+        this.setState({ [state]: value })
         let total = 0;
         if (state == 'cartModalIsOpen' && value == true) {
+            this.setState({ cart: [] })
             axios({
                 url: "http://localhost:2000/getuser",
                 method: "POST",
@@ -246,6 +279,9 @@ class Navbar extends React.Component {
                     }
                 }
             )
+        } else if (state == 'formModalIsOpen' && value == true) {
+            this.setState({ poname: user.name, pomail: user.mail, cartModalIsOpen: false })
+
         }
     }
     addItems = (index, operationType) => {
@@ -304,6 +340,111 @@ class Navbar extends React.Component {
             )
         }
     }
+    handleInputChange = (event, state) => {
+        this.setState({ [state]: event.target.value })
+    }
+
+    isDate(val) {
+        // Cross realm comptatible
+        return Object.prototype.toString.call(val) === '[object Date]'
+    }
+
+    isObj = (val) => {
+        return typeof val === 'object'
+    }
+
+    stringifyValue = (val) => {
+        if (this.isObj(val) && !this.isDate(val)) {
+            return JSON.stringify(val)
+        } else {
+            return val
+        }
+    }
+
+    buildForm = ({ action, params }) => {
+        const form = document.createElement('form')
+        form.setAttribute('method', 'post')
+        form.setAttribute('action', action)
+
+        Object.keys(params).forEach(key => {
+            const input = document.createElement('input')
+            input.setAttribute('type', 'hidden')
+            input.setAttribute('name', key)
+            input.setAttribute('value', this.stringifyValue(params[key]))
+            form.appendChild(input)
+        })
+
+        return form
+    }
+
+    post = (details) => {
+        const form = this.buildForm(details)
+        document.body.appendChild(form)
+        form.submit()
+        form.remove()
+    }
+
+    getData = (data) => {
+        return fetch(`http://localhost:2000/payment`, {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        }).then(response => response.json()).catch(err => console.log(err))
+    }
+
+    makePayment = (e) => {
+        const { subTotal, pomail, poname, poaddress, ponumber, cart,user } = this.state
+        axios({
+            method: 'POST',
+            url: 'http://localhost:2000/placeOrder',
+            headers: { 'Content-Type': 'application/json' },
+            data: {
+                placedOrder: cart.map(item=>{return {
+                    address : poaddress,
+                    username:poname,
+                    number:ponumber,
+                    name:item.name,
+                    description:item.description,
+                    ingredients:item.ingredients,
+                    restaurantId:item.restaurantId,
+                    image:item.image,
+                    price: item.price,
+                    qty:item.qty 
+                }})
+            }
+        }).then((res) => {
+            axios({
+                url: "http://localhost:2000/cart",
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                data: {
+                    "userId": user._id,
+                    "cart": []
+                }
+            }).then(
+                result => {
+                    if (result.data.updated) {
+                        this.cart("cartModalIsOpen", true)
+                    }
+                }
+            )
+        }).catch(err => {
+            window.alert("Error");
+            this.setState({ caModalIsOpen: false })
+        })
+        this.getData({ amount: subTotal, email: pomail }).then(response => {
+            var information = {
+                action: "https://securegw-stage.paytm.in/order/process",
+                params: response
+            }
+            this.post(information);
+        })
+        e.preventDefault();
+    }
+
     componentDidMount() {
         const username = localStorage.getItem("username")
         const socialId = localStorage.getItem("socialId")
@@ -312,7 +453,7 @@ class Navbar extends React.Component {
         }
     }
     render() {
-        const { subTotal, loginModalIsOpen, caModalIsOpen, user, isUserLoggedIn, remeberUser, cartModalIsOpen, cart } = this.state;
+        const {isRestLogin,restName, subTotal, restLoginModalIsOpen, loginModalIsOpen, caModalIsOpen, user, isUserLoggedIn, remeberUser, cartModalIsOpen, cart, formModalIsOpen, poaddress, pomail, poname, ponumber } = this.state;
         return <>
             <div className="logo-frame-f" onClick={this.Navigate}>
                 <div className="logo-text-f">e!</div>
@@ -322,16 +463,20 @@ class Navbar extends React.Component {
                 <div className="username">{user.name}
                 </div>
                 <button onClick={() => this.cart('cartModalIsOpen', true)} className="cart-btn"><i className="fa fa-shopping-cart" aria-hidden="true"></i></button>
-                <button className="btn btn-primary button" onClick={this.handleLogout}>Logout</button>
+                <button className="btn btn-primary button" onClick={()=>this.handleLogout("isUserLoggedIn")}>Logout</button>
+            </div> : isRestLogin ? <div className="nav-bar d-flex justify-content-end align-items-center">
+                <div className="username m-4">{restName}</div>
+                <button className="btn btn-primary button" onClick={()=>this.handleLogout("isRestLogin")}>Logout</button>
             </div> : <div className="nav-bar d-flex justify-content-end align-items-center">
-                <button className="btn btn-primary button" onClick={() => this.handleModal("loginModalIsOpen")}>Login</button>
-                <button className="btn btn-secondary button" onClick={() => this.handleModal("caModalIsOpen")}>Create Account</button>
+                <button className="btn btn-primary button" onClick={() => this.handleModal("loginModalIsOpen", true)}>Login</button>
+                <button className="btn btn-secondary button" onClick={() => this.handleModal("caModalIsOpen", true)}>Create Account</button>
             </div>}
             <Modal
                 isOpen={loginModalIsOpen}
                 style={customStyles}
             >
                 <div>
+                    <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.handleModal("loginModalIsOpen", false)}></div>
                     <h1 className="m-4"> Login To Zomato-clone</h1>
                     <div className="container">
                         <label for="uname"><b>Username : </b></label>
@@ -343,7 +488,8 @@ class Navbar extends React.Component {
                         <label className="m-2">
                             <input type="checkbox" checked={remeberUser} name="remember" onClick={() => this.setState({ remeberUser: !remeberUser })} /> Remember me
                             </label>  <span className="psw">Forgot <a href="#">password?</a></span><br />
-                        <button className="btn btn-primary btn-block m-2" onClick={this.login}>Login</button>
+                        <button className="btn btn-primary m-2" onClick={this.login}>Login</button>
+                        <button className="m-2 btn btn-primary" onClick={() => this.handleModal("restLoginModalIsOpen", true)}>Restaurant Login</button>
                     </div>
                     <div className="m-2 mt-4 d-block">
                         <GoogleLogin
@@ -372,6 +518,7 @@ class Navbar extends React.Component {
                 style={customStyles}
             >
                 <div>
+                    <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.handleModal('caModalIsOpen', false)}></div>
                     <h1 className="m-4"> Create Zomato-clone Account</h1>
                     <div className="container">
                         <label for="name"><b>Name : </b></label>
@@ -439,16 +586,63 @@ class Navbar extends React.Component {
                         </div>
                     })}
                     <h3>SubTotal : {subTotal}</h3>
-                    <button className="btn btn-danger pay" onClick={this.updateCart}>Update Cart</button>
-                    <div className="card" style={{ width: '44rem', marginTop: '10px', marginBottom: '10px', margin: 'auto' }}>
-
-                    </div>
-                </div> : 
-                <div >
-                    <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.cart('cartModalIsOpen', false)}></div>
-                    <h1 className="m-5">Cart Is Empty <br/> Add Items To Cart</h1>
-                </div>}
+                    <button className="btn btn-danger pay m-3" onClick={this.updateCart}>Update Cart</button>
+                    <button className="btn btn-success pay m-3" onClick={() => this.cart('formModalIsOpen', true)}>Place Order</button>
+                </div> :
+                    <div >
+                        <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.cart('cartModalIsOpen', false)}></div>
+                        <h1 className="m-5">Cart Is Empty <br /> Add Items To Cart</h1>
+                    </div>}
             </Modal>
+            <Modal
+                isOpen={formModalIsOpen}
+                style={customStyles}
+            >
+                <div className="m-5">
+                    <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.cart('formModalIsOpen', false)}></div>
+                    <h3 className="restaurant-name">Place Order</h3>
+                    <form onSubmit={this.makePayment}>
+                        <table>
+                            <tr>
+                                <td>Name</td>
+                                <td><input type="text" value={poname} onChange={(event) => this.handleInputChange(event, 'poname')} required /></td>
+                            </tr>
+                            <tr>
+                                <td>Conatct Number</td>
+                                <td><input type="text" value={ponumber} onChange={(event) => this.handleInputChange(event, 'ponumber')} required /></td>
+                            </tr>
+                            <tr>
+                                <td>Address</td>
+                                <td><input type="text" value={poaddress} onChange={(event) => this.handleInputChange(event, 'poaddress')} required /></td>
+                            </tr>
+                            <tr>
+                                <td>Email</td>
+                                <td><input type="text" value={pomail} onChange={(event) => this.handleInputChange(event, 'pomail')} required /></td>
+                            </tr>
+                        </table>
+                        <input type="submit" className="btn btn-danger btn-block mt-4" value="Proceed" />
+                    </form>
+                </div>
+            </Modal>
+            <Modal
+                isOpen={restLoginModalIsOpen}
+                style={customStyles}
+            >
+                <div>
+                    <div className="fa fa-times" aria-hidden="true" style={{ float: 'right' }} onClick={() => this.handleModal('restLoginModalIsOpen', false)}></div>
+                    <h1 className="m-4">Restaurant login</h1>
+                    <div className="container">
+                        <label for="uname"><b>Username : </b></label>
+                        <input type="text" placeholder="Enter Username" name="uname" required onInput={(event) => this.setState({ restUsername: event.target.value })} />
+                        <br />
+                        <label for="psw"><b>Password : </b></label>
+                        <input type="password" placeholder="Enter Password" name="psw" required onInput={(event) => this.setState({ restPassword: event.target.value })} />
+                        <br />
+                        <button className="btn btn-primary btn-block m-2" onClick={this.restLogin}>Login</button>
+                    </div>
+                </div>
+            </Modal>
+
         </>
     }
 }

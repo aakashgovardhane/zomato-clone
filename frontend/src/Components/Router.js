@@ -5,6 +5,7 @@ import Home from './Home'
 import Overview from './Overview'
 import Filter from './Filter'
 import Navbar from './Navbar'
+import restAdmin from './restAdminPanel'
 const Router = () => {
     return (
         <BrowserRouter>
@@ -12,6 +13,7 @@ const Router = () => {
         <Route exact path="/" component={Home}/>
         <Route path="/filter" component={Filter}/>
         <Route path="/Overview" component={Overview}/>
+        <Route path="/restAdminPanel" component={restAdmin}/>
         </BrowserRouter>
     )
 }
